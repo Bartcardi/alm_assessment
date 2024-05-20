@@ -1,14 +1,6 @@
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, length, lit, regexp_extract, substring, when
-from pyspark.sql.types import (
-    DateType,
-    DoubleType,
-    IntegerType,
-    NullType,
-    StringType,
-    StructField,
-    StructType,
-)
+from pyspark.sql.types import DateType, DoubleType, IntegerType
 
 from utils import spark
 
@@ -58,7 +50,8 @@ def map_source1(df: DataFrame):
         .withColumn("NumberOfEmployees", col("NumberOfEmployees").cast(IntegerType()))
         .withColumn("OnboardingDate", col("ClientSince").cast(DateType()))
         .drop("ClientSince")
-        .withColumn("LoanCheck", lit(None).cast(StringType()))
+        .withColumn("LoanCheck", lit(""))
+        # .withColumn("LoanCheck", lit(None).cast(StringType()))
         .withColumnRenamed("Location", "Country")
         .withColumn("DiscountCheck", substring(col("EligibleForDiscount"), 1, 1))
         .drop("EligibleForDiscount")
@@ -89,8 +82,10 @@ def map_source2(df: DataFrame):
         .withColumn("OnboardingDate", col("ClientSince").cast(DateType()))
         .drop("ClientSince")
         .withColumn("LoanCheck", substring(col("HasLoan"), 1, 1))
-        .withColumn("Country", lit(None).cast(StringType()))
-        .withColumn("DiscountCheck", lit(None).cast(StringType()))
+        .withColumn("Country", lit(""))
+        # .withColumn("Country", lit(None).cast(StringType()))
+        .withColumn("DiscountCheck", lit(""))
+        # .withColumn("DiscountCheck", lit(None).cast(StringType()))
         .withColumn("SnapshotDate", col("SnapshotDate").cast(DateType()))
     ).select(
         "SourceSystem",
@@ -106,6 +101,44 @@ def map_source2(df: DataFrame):
         "SnapshotDate",
     )
     return df
+
+
+def convert_to_euros(df, amount_col, currency_col, exchange_rates_df):
+    """
+    Converts a column of amounts in various currencies to Euros using a lookup table of exchange rates.
+
+    Args:
+        df: The input Spark DataFrame containing the amount and currency columns.
+        amount_col: The name of the column containing the amounts to be converted.
+        currency_col: The name of the column containing the currency codes.
+        exchange_rates_df: A Spark DataFrame with columns 'currency' and 'rate_to_eur'.
+
+    Returns:
+        A new Spark DataFrame with the converted amount in Euros.
+    """
+
+    # Join the input DataFrame with the exchange rate lookup table
+    joined_df = df.join(
+        exchange_rates_df,
+        on=[
+            exchange_rates_df["Currency"] == df[currency_col],
+            exchange_rates_df["SnapShotDate"] == df["SnapShotDate"],
+        ],
+        how="left",  # Left join to keep all rows from the original DataFrame
+    )
+
+    # Perform the conversion
+    converted_df = joined_df.withColumn(
+        "AmountEUR",
+        when(
+            col("ExchangeRate").isNotNull(), col(amount_col) * col("ExchangeRate")
+        ).otherwise(
+            col(amount_col)
+        ),  # Handle missing exchange rates
+    )
+
+    # Return the DataFrame with the new 'amount_eur' column (optionally drop unnecessary columns)
+    return converted_df.select(df["*"], "AmountEUR")
 
 
 def main():
@@ -124,6 +157,14 @@ def main():
 
     df_final = df_s1.union(df_s2)
 
+    df_final.show()
+    # print(df_final.schema)
+
+    df_exchange_rates = spark.read.table("Exchange_Rates")
+
+    df_final = convert_to_euros(
+        df_final, "OriginalAmount", "OriginalCurrency", df_exchange_rates
+    )
     df_final.show()
 
 
