@@ -1,6 +1,8 @@
+import os
+
 from pyspark.sql import SparkSession
 
-warehouse_location = "spark-warehouse"
+warehouse_location = os.getcwd() + "/spark-warehouse"
 
 # Creating a SparkSession
 spark = (

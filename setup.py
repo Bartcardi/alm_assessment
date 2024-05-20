@@ -9,6 +9,9 @@ setup(
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     install_requires=[
+        "pip==24.0",
         "pandas==2.2.0",
+        "pytest==8.2.1",
+        "pytest-spark==0.6.0",
     ],
 )
