@@ -1,8 +1,10 @@
-from pyspark.sql.functions import col, length, regexp_extract, substring, when
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col, length, lit, regexp_extract, substring, when
 from pyspark.sql.types import (
     DateType,
-    FloatType,
+    DoubleType,
     IntegerType,
+    NullType,
     StringType,
     StructField,
     StructType,
@@ -46,15 +48,83 @@ def correct_triple_digit_days_dates(df, column_name):
     ).drop(f"is_valid_{column_name}")
 
 
+def map_source1(df: DataFrame):
+    df = (
+        df.withColumnRenamed("DataSource", "SourceSystem")
+        .withColumn("ClientNumber", col("ClientNumber").cast(IntegerType()))
+        .withColumn("OriginalAmount", col("ClientAmount").cast(DoubleType()))
+        .drop("ClientAmount")
+        .withColumnRenamed("Currency", "OriginalCurrency")
+        .withColumn("NumberOfEmployees", col("NumberOfEmployees").cast(IntegerType()))
+        .withColumn("OnboardingDate", col("ClientSince").cast(DateType()))
+        .drop("ClientSince")
+        .withColumn("LoanCheck", lit(None).cast(StringType()))
+        .withColumnRenamed("Location", "Country")
+        .withColumn("DiscountCheck", substring(col("EligibleForDiscount"), 1, 1))
+        .drop("EligibleForDiscount")
+        .withColumn("SnapshotDate", col("SnapshotDate").cast(DateType()))
+    ).select(
+        "SourceSystem",
+        "ClientGroup",
+        "ClientNumber",
+        "OriginalAmount",
+        "OriginalCurrency",
+        "NumberOfEmployees",
+        "OnboardingDate",
+        "LoanCheck",
+        "Country",
+        "DiscountCheck",
+        "SnapshotDate",
+    )
+    return df
+
+
+def map_source2(df: DataFrame):
+    df = (
+        df.withColumn("ClientNumber", col("ClientNumber").cast(IntegerType()))
+        .withColumn("OriginalAmount", col("ClientAmount").cast(DoubleType()))
+        .drop("ClientAmount")
+        .withColumnRenamed("Currency", "OriginalCurrency")
+        .withColumn("NumberOfEmployees", col("NumberOfEmployees").cast(IntegerType()))
+        .withColumn("OnboardingDate", col("ClientSince").cast(DateType()))
+        .drop("ClientSince")
+        .withColumn("LoanCheck", substring(col("HasLoan"), 1, 1))
+        .withColumn("Country", lit(None).cast(StringType()))
+        .withColumn("DiscountCheck", lit(None).cast(StringType()))
+        .withColumn("SnapshotDate", col("SnapshotDate").cast(DateType()))
+    ).select(
+        "SourceSystem",
+        "ClientGroup",
+        "ClientNumber",
+        "OriginalAmount",
+        "OriginalCurrency",
+        "NumberOfEmployees",
+        "OnboardingDate",
+        "LoanCheck",
+        "Country",
+        "DiscountCheck",
+        "SnapshotDate",
+    )
+    return df
+
+
 def main():
     spark.sql("CREATE DATABASE IF NOT EXISTS silver")
     spark.sql("USE bronze")
+
     df_s1 = spark.read.table("Source1")
     df_s1 = check_date_format_regex(df_s1, "ClientSince")
     df_s1 = correct_triple_digit_days_dates(df_s1, "ClientSince")
+    df_s1 = map_source1(df_s1)
+
     df_s2 = spark.read.table("Source2")
     df_s2 = check_date_format_regex(df_s2, "ClientSince")
     df_s2 = correct_triple_digit_days_dates(df_s2, "ClientSince")
+    df_s2 = map_source2(df_s2)
+
+    df_final = df_s1.union(df_s2)
+
+    df_final.show()
 
 
 if __name__ == "__main__":
