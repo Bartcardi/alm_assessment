@@ -169,6 +169,19 @@ def is_client_secured(df, client_id_col, string_col, client_secured_df):
     return joined_df.select(df["*"], "ClientSecuredIND")
 
 
+def determine_enterprize_size(df):
+    df = df.withColumn(
+        "EnterprizeSize",
+        when(col("NumberOfEmployees") < 100, "S")
+        .when(
+            (col("NumberOfEmployees") >= 100) & (col("NumberOfEmployees") < 1000),
+            "M",
+        )
+        .otherwise("L"),
+    )
+    return df
+
+
 def main():
     spark.sql("CREATE DATABASE IF NOT EXISTS silver")
     spark.sql("USE bronze")
@@ -200,7 +213,15 @@ def main():
         df_final, "ClientNumber", "ClientSecuredInd", df_client_secured
     )
 
+    df_final = determine_enterprize_size(df_final)
+
     df_final.show()
+
+    # Drop the existing silver.Final table if it exists to avoid conflicts
+    spark.sql("DROP TABLE IF EXISTS silver.Final")
+
+    # Write the data as a Delta table in the 'silver' database
+    df_final.write.format("delta").saveAsTable("silver.Final")
 
 
 if __name__ == "__main__":
