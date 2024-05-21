@@ -89,7 +89,7 @@ df = spark.read.csv(
     header=True,
     sep=";",
     schema=bronze_schema_client_secured_ind,
-)
+).drop_duplicates()
 
 # Drop the existing bronze.Exchange_Rates table if it exists to avoid conflicts
 spark.sql("DROP TABLE IF EXISTS bronze.Client_Secured_Ind")

@@ -1,11 +1,13 @@
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import (
     col,
-    length,
+    lag,
     lit,
+    max,
     regexp_extract,
     round,
     substring,
+    sum,
     when,
 )
 from pyspark.sql.types import DateType, DoubleType, IntegerType
@@ -182,6 +184,65 @@ def determine_enterprize_size(df):
     return df
 
 
+def calculate_secured_amount(df):
+    # create window for running totals
+    cumulative_window = (
+        Window.partitionBy("ClientGroup", "ClientSecuredIND")
+        .orderBy(
+            "ClientNumber"
+            # in this case we will use rangeBetween for the sum
+        )
+        .rangeBetween(
+            # In this case we need to use Window.unboundedPreceding to catch all earlier rows
+            Window.unboundedPreceding,
+            0,
+        )
+    )
+    normal_window = Window.partitionBy("ClientGroup").orderBy("ClientNumber")
+
+    df_cumulative = df.withColumn(
+        "remaining_amount",
+        when(
+            col("ClientSecuredIND"), 500000 - sum("AmountEUR").over(cumulative_window)
+        ),
+    )
+
+    df_allocated = df_cumulative.withColumn(
+        "SecuredAmount",
+        when(
+            (lag("remaining_amount", 1).over(normal_window).isNull())
+            & (
+                col("remaining_amount") >= 0
+            ),  # Check if previous row does not exist and current row is positive
+            col("AmountEUR"),
+        )
+        .when(
+            (lag("remaining_amount", 1).over(normal_window).isNull())
+            & (
+                col("remaining_amount") < 0
+            ),  # Check if previous row does not exist and current row is negative
+            lit(500000),
+        )
+        .when(
+            (lag("remaining_amount", 1).over(normal_window).isNotNull())
+            & (
+                col("remaining_amount") >= 0
+            ),  # Check if previous row exists and current row is positive
+            col("AmountEUR"),
+        )
+        .when(
+            (lag("remaining_amount", 1).over(normal_window).isNotNull())
+            & (col("remaining_amount") < 0)
+            & (
+                lag("remaining_amount", 1).over(normal_window) > 0
+            ),  # Check if previous row does not exist and current row is positive
+            lag("remaining_amount", 1).over(normal_window),
+        )
+        .otherwise(lit(0)),
+    ).drop("remaining_amount")
+    return df_allocated
+
+
 def main():
     spark.sql("CREATE DATABASE IF NOT EXISTS silver")
     spark.sql("USE bronze")
@@ -196,24 +257,32 @@ def main():
     df_s2 = correct_triple_digit_days_dates(df_s2, "ClientSince")
     df_s2 = map_source2(df_s2)
 
+    print(f"Rows df_s1: {df_s1.count()}")
+    print(f"Rows df_s2: {df_s2.count()}")
+
     df_final = df_s1.union(df_s2)
 
-    # df_final.show()
-    # print(df_final.schema)
+    print(f"Rows df_final: {df_final.count()}")
 
     df_exchange_rates = spark.read.table("Exchange_Rates")
 
     df_final = convert_to_euros(
         df_final, "OriginalAmount", "OriginalCurrency", df_exchange_rates
     )
+    print(f"Rows df_final after exchange rates: {df_final.count()}")
 
     df_client_secured = spark.read.table("Client_Secured_Ind")
 
     df_final = is_client_secured(
         df_final, "ClientNumber", "ClientSecuredInd", df_client_secured
     )
+    print(f"Rows df_final after is secured: {df_final.count()}")
 
     df_final = determine_enterprize_size(df_final)
+
+    print(f"Rows df_final after enterprize size: {df_final.count()}")
+
+    df_final = calculate_secured_amount(df_final)
 
     df_final.show()
 
@@ -222,6 +291,7 @@ def main():
 
     # Write the data as a Delta table in the 'silver' database
     df_final.write.format("delta").saveAsTable("silver.Final")
+    df_final.write.csv("data/Output Files/final.csv", header="true")
 
 
 if __name__ == "__main__":
