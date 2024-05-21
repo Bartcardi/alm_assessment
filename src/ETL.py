@@ -164,7 +164,9 @@ def is_client_secured(df, client_id_col, string_col, client_secured_df):
         how="left",  # Left join to keep all rows from the original DataFrame
     )
 
-    return joined_df.select(df["*"], string_col)
+    joined_df = joined_df.withColumnRenamed("ClientSecuredInd", "ClientSecuredIND")
+
+    return joined_df.select(df["*"], "ClientSecuredIND")
 
 
 def main():
