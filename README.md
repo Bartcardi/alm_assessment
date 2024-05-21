@@ -20,10 +20,12 @@ This project demonstrates the following key aspects of a data lake architecture:
     * Ensuring code quality and reliability through testing.
 
 # Project Structure
-* `data/`: Contains sample source data files (CSV, Parquet).
+* `data/Source Files`: Contains sample source data files (CSV, Parquet).
+* `data/Lookup Files`: Contains the lookup files in csv.
 * `conftest.py`: Pytest configuration file with fixtures for a shared SparkSession.
-* `utils.py`: (Optional) This module could contain utility functions for data processing and validation.
-* `main.py`: The main script for data ingestion and transformation.
+* `utils.py`: (Optional) This module could contain utility functions for data processing and validation but now only contains a handle to the spark session.
+* `init_bronze.py`: The main script for data ingestion in bronze.
+* `ETL.py`: The main script for data cleanup and transformations.
 * `test_*.py`: Pytest test files for unit testing your data processing functions.
 
 # Running the Code
@@ -56,5 +58,12 @@ pytest
 ```
 
 # Data Flow
-1. Raw Data: Source data is located in the data/ directory.
+1. Raw Data: Source data is located in the `data/Source Files` and `data/Lookup Files` directory.
 2. Bronze Layer: Data is ingested as-is into Delta tables in the "bronze" database.
+3. Silver Layer: Data is enriched with procedures in `ETL.py` 
+
+# Assumptions
+
+1. There are invalid dates in `ClientSince`. In order to correct data quality issues we would normally have to talk a data officer for instance. Now I have just stripped one digit to demonstrate one possible solution for input error handling. 
+2. `LoanCheck` and `DiscountCheck` have `NA` as default value in the mapping excel. Therefore, I have put an empty string in the corresponding rows where this attribute is missing (instead of `None`) 
+3. Some values for `ClientNumber` which are in the data sources are not in the lookup table and are therefore marked `None` in `ClientSecuredIND` and are not considered in the secured amount transformation. 

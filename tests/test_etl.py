@@ -1,6 +1,7 @@
 import pytest
 from conftest import spark_session
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, lag, lit, sum, when
 
 from ETL import (
     calculate_secured_amount,
@@ -142,5 +143,74 @@ def test_is_client_secured(
     # Verify the result DataFrame
     expected_df = spark_session.createDataFrame(
         expected_output, [client_id_col, "ClientSecuredIND"]
+    )
+    assert result_df.collect() == expected_df.collect()
+
+
+@pytest.mark.parametrize(
+    "input_data, expected_output",
+    [
+        # Test Case 1: Basic Functionality (Within Limit)
+        (
+            [
+                ("GroupA", True, 100000, 1),
+                ("GroupA", False, 200000, 2),
+                ("GroupA", True, 300000, 3),
+            ],
+            [
+                ("GroupA", False, 200000, 2, 0),
+                ("GroupA", True, 100000, 1, 100000),
+                ("GroupA", True, 300000, 3, 300000),
+            ],
+        ),
+        # Test Case 2: Exceeding the Limit per Secured Group
+        (
+            [
+                ("GroupB", True, 300000, 1),
+                ("GroupB", True, 300000, 2),
+                ("GroupB", True, 100000, 3),
+            ],
+            [
+                ("GroupB", True, 300000, 1, 300000),
+                ("GroupB", True, 300000, 2, 200000),
+                ("GroupB", True, 100000, 3, 0),
+            ],
+        ),
+        # Test Case 3: Multiple Groups and Combinations
+        (
+            [
+                ("GroupC", True, 250000, 1),
+                ("GroupC", False, 100000, 2),
+                ("GroupC", True, 400000, 3),
+                ("GroupD", True, 600000, 1),
+                ("GroupD", False, 50000, 2),
+            ],
+            [
+                ("GroupC", False, 100000, 2, 0),
+                ("GroupC", True, 250000, 1, 250000),
+                ("GroupC", True, 400000, 3, 250000),
+                ("GroupD", False, 50000, 2, 0),
+                ("GroupD", True, 600000, 1, 500000),
+            ],
+        ),
+    ],
+)
+def test_calculate_secured_amount(
+    spark_session: SparkSession, input_data, expected_output
+):
+    """
+    Tests the calculate_secured_amount function with various scenarios.
+    """
+
+    # Create test DataFrames
+    schema = ["ClientGroup", "ClientSecuredIND", "AmountEUR", "ClientNumber"]
+    df = spark_session.createDataFrame(input_data, schema)
+
+    # Call the function under test
+    result_df = calculate_secured_amount(df)
+
+    # Verify the results
+    expected_df = spark_session.createDataFrame(
+        expected_output, schema + ["SecuredAmount"]
     )
     assert result_df.collect() == expected_df.collect()

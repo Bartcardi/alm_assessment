@@ -198,7 +198,9 @@ def calculate_secured_amount(df):
             0,
         )
     )
-    normal_window = Window.partitionBy("ClientGroup").orderBy("ClientNumber")
+    normal_window = Window.partitionBy("ClientGroup", "ClientSecuredIND").orderBy(
+        "ClientNumber"
+    )
 
     df_cumulative = df.withColumn(
         "remaining_amount",
@@ -239,7 +241,8 @@ def calculate_secured_amount(df):
             lag("remaining_amount", 1).over(normal_window),
         )
         .otherwise(lit(0)),
-    ).drop("remaining_amount")
+    )
+    df_allocated = df_allocated.drop("remaining_amount")
     return df_allocated
 
 
