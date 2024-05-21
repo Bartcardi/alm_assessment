@@ -41,7 +41,13 @@ Run initialisation of bronze tables:
 python3 src/init_bronze_db.py
 ```
 
-or press the run button in VSCode
+Run the ETL processes:
+
+```bash
+python3 src/ETL.py
+```
+
+or press the run button in VSCode for the respective files. 
 
 Run the tests:
 
