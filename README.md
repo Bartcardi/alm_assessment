@@ -67,3 +67,60 @@ pytest
 1. There are invalid dates in `ClientSince`. In order to correct data quality issues we would normally have to talk a data officer for instance. Now I have just stripped one digit to demonstrate one possible solution for input error handling. 
 2. `LoanCheck` and `DiscountCheck` have `NA` as default value in the mapping excel. Therefore, I have put an empty string in the corresponding rows where this attribute is missing (instead of `None`) 
 3. Some values for `ClientNumber` which are in the data sources are not in the lookup table and are therefore marked `None` in `ClientSecuredIND` and are not considered in the secured amount transformation. 
+
+# Answers
+
+1. Value of SecuredAmount for Client_Number 6991
+
+```python
+spark.sql("SELECT SecuredAmount from silver.Final where ClientNumber==6991").show()
+```
+
+```shell
++-------------+
+|SecuredAmount|
++-------------+
+|          0.0|
++-------------+
+```
+
+2. Number of records where EnterprizeSize is M
+
+```python
+spark.sql("SELECT count(*) as NumberMSizedEnterprizes from silver.Final where EnterprizeSize=='M'").show()
+```
+
+```shell
++-----------------------+
+|NumberMSizedEnterprizes|
++-----------------------+
+|                      6|
++-----------------------+
+```
+
+3. Total Sum of AmountEUR for all records for Source2
+
+```python
+spark.sql("SELECT sum(AmountEUR) as TotalSumAmountEURSource2 from silver.Final where SourceSystem=='Source2'").show()
+```
+
+```shell
++------------------------+
+|TotalSumAmountEURSource2|
++------------------------+
+|              1800631.68|
++------------------------+
+```
+4. Total Sum of OriginalAmount for all the records with ClientSecuredIND false
+
+```python
+spark.sql("SELECT sum(OriginalAmount) as TotalSumOriginalAmountClientSecuredFalse from silver.Final where ClientSecuredIND==false").show()
+```
+
+```shell
++----------------------------------------+
+|TotalSumOriginalAmountClientSecuredFalse|
++----------------------------------------+
+|                               297518.47|
++----------------------------------------+
+```
