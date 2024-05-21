@@ -1,5 +1,13 @@
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, length, lit, regexp_extract, substring, when
+from pyspark.sql.functions import (
+    col,
+    length,
+    lit,
+    regexp_extract,
+    round,
+    substring,
+    when,
+)
 from pyspark.sql.types import DateType, DoubleType, IntegerType
 
 from utils import spark
@@ -131,7 +139,8 @@ def convert_to_euros(df, amount_col, currency_col, exchange_rates_df):
     converted_df = joined_df.withColumn(
         "AmountEUR",
         when(
-            col("ExchangeRate").isNotNull(), col(amount_col) * col("ExchangeRate")
+            col("ExchangeRate").isNotNull(),
+            round(col(amount_col) * col("ExchangeRate"), 2),
         ).otherwise(
             col(amount_col)
         ),  # Handle missing exchange rates
