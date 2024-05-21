@@ -146,8 +146,25 @@ def convert_to_euros(df, amount_col, currency_col, exchange_rates_df):
         ),  # Handle missing exchange rates
     )
 
-    # Return the DataFrame with the new 'amount_eur' column (optionally drop unnecessary columns)
+    # Return the DataFrame with the new 'AmountEUR' column
     return converted_df.select(df["*"], "AmountEUR")
+
+
+def is_client_secured(df, client_id_col, string_col, client_secured_df):
+    client_secured_df = client_secured_df.withColumn(
+        string_col,
+        when(col(string_col) == "Y", True)
+        .when(col(string_col) == "N", False)
+        .otherwise(None),  # Handle values other than 'Y' or 'N' as null
+    )
+
+    joined_df = df.join(
+        client_secured_df,
+        on=client_secured_df[client_id_col] == df[client_id_col],
+        how="left",  # Left join to keep all rows from the original DataFrame
+    )
+
+    return joined_df.select(df["*"], string_col)
 
 
 def main():
@@ -166,7 +183,7 @@ def main():
 
     df_final = df_s1.union(df_s2)
 
-    df_final.show()
+    # df_final.show()
     # print(df_final.schema)
 
     df_exchange_rates = spark.read.table("Exchange_Rates")
@@ -174,6 +191,13 @@ def main():
     df_final = convert_to_euros(
         df_final, "OriginalAmount", "OriginalCurrency", df_exchange_rates
     )
+
+    df_client_secured = spark.read.table("Client_Secured_Ind")
+
+    df_final = is_client_secured(
+        df_final, "ClientNumber", "ClientSecuredInd", df_client_secured
+    )
+
     df_final.show()
 
 
